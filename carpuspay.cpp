@@ -1,9 +1,5 @@
-#include <WiFi.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>  // Make sure to install this library
-
-const char* ssid = "YOUR_SSID";
-const char* password = "YOUR_PASSWORD";
+#include <ArduinoJson.h>     // Ensure this library is installed
 
 const String merchantId = "YOUR_MERCHANT_ID";
 const String sharedSecret = "YOUR_SHARED_SECRET_KEY";
@@ -11,13 +7,6 @@ const String apiEndpoint = "https://api.cybersource.com/pts/v2/payments"; // Adj
 
 void setup() {
     Serial.begin(115200);
-    WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.println("Connecting to WiFi...");
-    }
-    Serial.println("Connected to WiFi");
 
     // Example: Generate a payment token
     String token = generatePaymentToken(1000.00); // Amount in currency units
@@ -25,45 +14,48 @@ void setup() {
 }
 
 void loop() {
-    // Your main code here
+    // No need to loop; code runs once in `setup()`
 }
 
 // Function to generate a payment token from CyberSource
 String generatePaymentToken(float amount) {
-    if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        String payload = createPayload(amount);
+    HTTPClient http;
+    String payload = createPayload(amount);
 
-        http.begin(apiEndpoint);
-        http.addHeader("Content-Type", "application/json");
-        http.addHeader("Accept", "application/json");
-        http.addHeader("Merchant-Id", merchantId);
-        
-        // You may need to add authentication headers, e.g., Basic Auth or OAuth, depending on your CyberSource configuration
-        
-        int httpResponseCode = http.POST(payload);
+    http.begin(apiEndpoint);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Accept", "application/json");
+    http.addHeader("Merchant-Id", merchantId);
+    
+    // Example: Adding Basic Auth (adjust as per CyberSource docs)
+    // http.addHeader("Authorization", "Basic " + base64::encode(sharedSecret));
 
-        if (httpResponseCode > 0) {
-            String response = http.getString();
-            Serial.println("Response code: " + String(httpResponseCode));
+    int httpResponseCode = http.POST(payload);
 
-            // Parse the JSON response
-            return parseResponse(response);
-        } else {
-            Serial.println("Error on sending: " + String(httpResponseCode));
-            return "";
-        }
-        http.end();
+    if (httpResponseCode > 0) {
+        String response = http.getString();
+        Serial.println("Response code: " + String(httpResponseCode));
+
+        // Parse the JSON response
+        return parseResponse(response);
+    } else {
+        Serial.println("Error on sending: " + String(httpResponseCode));
+        return "";
     }
+    http.end();
+
     return "";
 }
 
 // Function to create JSON payload for the payment request
 String createPayload(float amount) {
-    StaticJsonDocument<200> doc;
-    doc["amount"] = amount;
-    doc["currency"] = "USD"; // Change as needed
+    StaticJsonDocument<256> doc; // Increased buffer size
+    doc["amountDetails"]["totalAmount"] = amount;
+    doc["amountDetails"]["currency"] = "USD"; // Adjust as needed
     doc["merchantId"] = merchantId;
+    doc["paymentInstrument"]["card"]["number"] = "4111111111111111"; // Sample test card number
+    doc["paymentInstrument"]["card"]["expirationMonth"] = "12";
+    doc["paymentInstrument"]["card"]["expirationYear"] = "2025";
 
     String jsonString;
     serializeJson(doc, jsonString);
@@ -72,7 +64,7 @@ String createPayload(float amount) {
 
 // Function to parse the response from CyberSource
 String parseResponse(String response) {
-    StaticJsonDocument<200> doc;
+    StaticJsonDocument<512> doc; // Increased buffer size to handle larger responses
     DeserializationError error = deserializeJson(doc, response);
 
     if (!error) {
